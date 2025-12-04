@@ -15,6 +15,11 @@ public class BeatLightManager : MonoBehaviour
     public float maxIntensity = 5f;        // Maximum intensity on beats
     public float smoothSpeed = 8f;         // Lerp speed for smooth flicker
 
+    [Header("Color Settings")]
+    public bool changeColorWithAudio = false;
+    public Color lowColor = Color.blue;
+    public Color highColor = Color.red;
+
     private float[] spectrum = new float[128];
     private float targetIntensity;
 
@@ -26,21 +31,26 @@ public class BeatLightManager : MonoBehaviour
         // Get frequency data
         audioSource.GetSpectrumData(spectrum, 0, FFTWindow.BlackmanHarris);
 
-        // Read intensity from selected band
-        float intensity = spectrum[spectrumIndex] * sensitivity;
+        // Compute audio-based intensity
+        float rawIntensity = spectrum[spectrumIndex] * sensitivity;
+        targetIntensity = Mathf.Clamp(baseIntensity + rawIntensity, baseIntensity, maxIntensity);
 
-        // Clamp intensity to safe range
-        targetIntensity = Mathf.Clamp(baseIntensity + intensity, baseIntensity, maxIntensity);
+        // Normalized "audio amount" for color shifting (0–1)
+        float audioLevelNormalized = Mathf.Clamp01(rawIntensity / (maxIntensity - baseIntensity));
 
-        // Apply to each light
         foreach (var light in lights)
         {
             if (light == null) continue;
 
-            float current = light.intensity;
-            float newIntensity = Mathf.Lerp(current, targetIntensity, Time.deltaTime * smoothSpeed);
+            // Smooth intensity
+            light.intensity = Mathf.Lerp(light.intensity, targetIntensity, Time.deltaTime * smoothSpeed);
 
-            light.intensity = newIntensity;
+            // Color reaction
+            if (changeColorWithAudio)
+            {
+                Color targetColor = Color.Lerp(lowColor, highColor, audioLevelNormalized);
+                light.color = Color.Lerp(light.color, targetColor, Time.deltaTime * smoothSpeed);
+            }
         }
     }
 }
